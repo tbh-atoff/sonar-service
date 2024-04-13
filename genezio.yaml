@@ -21,4 +21,5 @@ backend:
     # List of scripts to run before starting `genezio local`.
     local: npm install
   # The cloud provider where the backend is deployed.
-  cloudProvider: genezio
+  cloudProvider: cluster
+
