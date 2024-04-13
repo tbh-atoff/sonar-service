@@ -14,6 +14,16 @@ const username = 'admin';
 const password = 'admin1';
 let sonar_bin = ''
 
+interface SonarTokenResponse {
+  login: string;
+  name: string;
+  token: string;
+  createdAt: string;
+  type: string;
+  projectKey: string;
+  expirationDate: string;
+}
+
 type SuccessResponse = {
   status: "success";
   country: string;
@@ -115,7 +125,7 @@ export class BackendService {
       });
       if (response.ok) {
         console.log("Project created succesfully")
-        // return await this.generateToken(projectKey, url, login, expirationDate, tokenType)
+        return await this.generateToken(projectKey, username, expirationDate, tokenType)
       } else {
         const errorText = await response.text();
         console.log(`Error: ${response.status} - ${errorText}`); // Throw an error with status and text if not successful
@@ -126,4 +136,92 @@ export class BackendService {
       return "Error during creating new sonar project"
     }
   }
+
+  async generateToken(projectKey: string, login: string, expirationDate: string, type: string): Promise<any> {
+    // SonarQube API endpoint for creating a project
+    const url_token_generate = sonar_url + "/api/user_tokens/generate";
+    const encodedAuth = btoa(`${username}:${password}`);
+
+    const headers = {
+      "Accept": "application/json",
+      "Accept-Language": "en-US,en;q=0.5",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${encodedAuth}`
+    };
+
+    const data = new URLSearchParams({
+      "projectKey": projectKey,
+      "name": projectKey,
+      "login": login,
+      "expirationDate": expirationDate,
+      "type": type
+    });
+
+    try {
+      const response = await fetch(url_token_generate, {
+        method: 'POST',
+        headers: headers,
+        body: data.toString()
+      });
+
+      if (response.ok) {
+        const responseVal = await response.json() as SonarTokenResponse;
+        if (responseVal.token !== null) {
+          console.log("Access token for sonar created succesfully")
+          return await this.runSonar(responseVal.token, projectKey)
+        } else {
+          console.log(`Error: ${response.status}`);
+          return "Error during token generation"
+        }
+
+      } else {
+        const errorText = await response.text();
+        console.log(`Error: ${response.status} - ${errorText}`);
+        return errorText
+      }
+    } catch (error) {
+      console.log('Request failed:', error);
+      return "Error during token generation"
+    }
+  }
+
+  runSonar(token: string, projectKey: string): Promise<string | undefined> {
+    return new Promise((resolve, reject) => {
+      const java_dev = "/usr/lib/jvm/java-21-openjdk-amd64/";
+      const scanProcess = spawn(sonar_bin, [
+        `-Dsonar.projectName=${projectKey}`,
+        `-Dsonar.projectKey=${projectKey}`,
+        `-Dsonar.sources=.`,
+        `-Dsonar.host.url=${sonar_url}`,
+        `-Dsonar.token=${token}`,
+        `-Dsonar.java.jdkHome=${java_dev}`
+      ], { cwd: "./code/" + projectKey });
+      
+      scanProcess.stdout.on('data', (data) => {
+        console.log(`stdout: ${data}`);
+      });
+
+      scanProcess.stderr.on('data', (data) => {
+        console.error(`stderr: ${data}`);
+      });
+
+      scanProcess.on('exit', (code) => {
+        if (code === 0) {
+          resolve("Sonar executed succesfully");
+          return "Sonar executed succesfully"
+        } else {
+          reject(new Error("Error"));
+          return "Error executing SonarScanner"
+        }
+      });
+
+      scanProcess.on('error', (error) => {
+        console.log(error);
+        reject(new Error("Error spawning process"));
+        return "Error executing SonarScanner"
+      });
+    });
+  }
+
 }
