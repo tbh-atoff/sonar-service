@@ -17,6 +17,7 @@ const sonar_url = "http://34.34.75.92:9000"
 const username = 'admin';
 const password = 'admin1';
 let sonar_bin = ''
+
 interface SonarTokenResponse {
   login: string;
   name: string;
@@ -106,8 +107,8 @@ const transporter = nodemailer.createTransport({
   port: 465,
   host: "smtp.gmail.com",
   auth: {
-    user: "healthharbourtech@gmail.com",
-    pass: "ivebkfbzykqphbwi",
+    user:  process.env.SERVER_EMAIL,
+    pass: process.env.SERVER_PASS,
   },
   secure: true,
 });
@@ -202,6 +203,14 @@ export class BackendService {
       unzip_process.stderr.on('data', (data) => {
         console.error(`stderr: ${data}`);
       });
+      exec('ls code/testing-code',
+        (error: ExecException | null, stdout: string, stderr: string) => {
+          console.log(`stdout: ${stdout}`);
+          console.log(`stderr: ${stderr}`);
+          if (error !== null) {
+            console.log(`exec error: ${error}`);
+          }
+        })
       exec('rm -f ' + "code/" + request.queryStringParameters["filename"],
         (error: ExecException | null, stdout: string, stderr: string) => {
           console.log(`stdout: ${stdout}`);
@@ -550,7 +559,7 @@ export class BackendService {
     try {
       const data = readFileSync(filePath, 'utf-8');
       console.log(data)
-      const report = this.generateTestReportHtml(JSON.parse(data));
+      const report = this.generateTestReportHtml(JSON.parse(data), projectKey);
       return report
 
     } catch (error) {
@@ -560,16 +569,20 @@ export class BackendService {
   }
 
   @GenezioMethod()
-  generateTestReportHtml(data: any) {
+  generateTestReportHtml(data: any, projectKey: string) {
     const { summary, tests } = data;
     let html = `
           <h1>Test Report Summary</h1>
           <div class="summary" style="background-color: #f8f9fa; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; width: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-around; align-items: center;">
           <p style="font-size: 16px; color: #333; margin: 0 10px;"><strong>Total Tests:</strong> <span style="color: #555;">${summary.total}</span></p>
-          <p style="font-size: 16px; color: #28a745; margin: 0 10px;"><strong>Passed:</strong> <span style="color: #555;">${summary.passed}</span></p>
+          <p style="font-size: 16px; color: #28a745; margin: 0 10px;"><strong>Passede:</strong> <span style="color: #555;">${summary.passed}</span></p>
           <p style="font-size: 16px; color: #dc3545; margin: 0 10px;"><strong>Failed:</strong> <span style="color: #555;">${summary.failed}</span></p>
       </div>
-      
+                <div class="summary" style="background-color: #f8f9fa; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px; width: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-around; align-items: center;">
+          <p style="font-size: 16px; color: #333; margin: 0 10px;"><strong>Information:</strong> </p>
+          <p style="font-size: 16px; color: #28a745; margin: 0 10px;"><span style="color: #555;"><a href="http://34.34.75.92:3000/docs/main" target="_blank"><strong>Documentation</strong></a></span></p>
+          <p style="font-size: 16px; color: #28a745; margin: 0 10px;"><span style="color: #555;"><a href="http://34.34.75.92:9000/project/issues?issueStatuses=OPEN%2CCONFIRMED&id=${projectKey}" target="_blank"><strong>More info from SonarQube </strong> </a></span></p>
+      </div>
       </div>    
           <table style="margin-bottom: 20px;  margin-top: 20px;">
               <thead>
@@ -635,7 +648,6 @@ export class BackendService {
 
   @GenezioMethod({ type: "http" })
   async emailServiceReq(request: GenezioHttpRequest): Promise<GenezioHttpResponse> {
-    console.log("I'm in email")
     if (request.queryStringParameters !== undefined && request.queryStringParameters["email"] !== undefined && request.queryStringParameters["projectKey"] !== undefined) {
       console.log(request.queryStringParameters["email"])
       let res = await this.sendEmail(request.queryStringParameters["email"], request.queryStringParameters["projectKey"])
@@ -665,16 +677,16 @@ export class BackendService {
   async sendEmail(email: string, projectKey: string) {
     let mailData
     let html = await this.composeHtml(projectKey)
-    if (!fs.existsSync('code/' + projectKey + '/profile.png')) {
+    if (!fs.existsSync('code/'+ projectKey + '/profile.png')) {
       mailData = {
-        from: "healthharbourtech@gmail.com",
+        from: process.env.SERVER_EMAIL,
         to: email,
         subject: "Your result after test generation, profiler and sonarqube code analysis",
         html: html,
       };
     } else {
       mailData = {
-        from: "healthharbourtech@gmail.com",
+        from: process.env.SERVER_EMAIL,
         to: email,
         subject: "Your result after test generation, profiler and sonarqube code analysis",
         html: html,
